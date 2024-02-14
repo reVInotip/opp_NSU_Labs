@@ -1,20 +1,23 @@
 #include "parser/parser.h"
+#include "matrix/matrix.h"
 #include <stdio.h>
 #include <stdlib.h>
 
-void FillMatrix() {
-
-}
-
 int main(int argc, char** argv) {
-    unsigned width = 0, length = 0;
+    unsigned blockWidth = 0;
+    unsigned blockLength = 0;
 
-    int code = ParseAgrs(argc, argv, &width, &length);
+    int code = ParseAgrs(argc, argv, &blockWidth, &blockLength);
     if (code) {
-        return code; 
+        return code;
     }
 
-    
+    Matrix matr;
+    printf("%u\n", blockLength * blockWidth);
+    InitMatrix(&matr, blockLength, blockWidth);
+    FillMatrix(&matr);
+    PrintMatrix(&matr);
+    DestroyMatrix(&matr);
 
     return EXIT_SUCCESS;
 }

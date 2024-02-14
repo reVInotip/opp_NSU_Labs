@@ -1,7 +1,8 @@
 #include "parser.h"
 #include <stdbool.h>
+#include <stdio.h>
 
-int ToNumber(char* strNumber) {
+int ToNumber(const char* strNumber) {
     int size = 1;
     while (strNumber[size - 1] != '\0') {
         ++size;

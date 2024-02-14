@@ -1,15 +1,13 @@
 #pragma once
 
-enum ERR_CODE_MATR {
-    OK
-};
-
 typedef struct {
-    int** matrix;
-    unsigned width;
-    unsigned length;
+    int* matrix;
+    unsigned blockLength;
+    unsigned countBlocksInRow;
+    unsigned long size;
 } Matrix;
 
-void CreateMatrix(Matrix* matr, unsigned width, unsigned length);
+void InitMatrix(Matrix* matr, const unsigned blockLength, unsigned countBlocksInRow);
 void DestroyMatrix(Matrix* matr);
 void FillMatrix(Matrix* matr);
+void PrintMatrix(Matrix* matr);
