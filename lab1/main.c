@@ -15,7 +15,6 @@ int main(int argc, char** argv) {
     Matrix matr;
     printf("%u\n", blockLength * blockWidth);
     InitMatrix(&matr, blockLength, blockWidth);
-    FillMatrix(&matr);
     PrintMatrix(&matr);
     DestroyMatrix(&matr);
 

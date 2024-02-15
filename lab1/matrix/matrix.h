@@ -9,5 +9,4 @@ typedef struct {
 
 void InitMatrix(Matrix* matr, const unsigned blockLength, unsigned countBlocksInRow);
 void DestroyMatrix(Matrix* matr);
-void FillMatrix(Matrix* matr);
 void PrintMatrix(Matrix* matr);

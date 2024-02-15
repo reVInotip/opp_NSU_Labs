@@ -12,6 +12,38 @@ void InitMatrix(Matrix* matr, const unsigned blockLength, unsigned countBlocksIn
         sizeof(int));
     matr->blockLength = blockLength;
     matr->countBlocksInRow = countBlocksInRow;
+
+    unsigned offset = blockLength * countBlocksInRow;
+    int currentOffset = 0;
+    unsigned long fakeMatrixOneSize =
+        (unsigned long)blockLength * blockLength *
+        (countBlocksInRow - 1) * countBlocksInRow;
+    long fakeMatrixTwoSize =
+        (long)blockLength * blockLength * countBlocksInRow;
+    for (int i = 0; i < matr->size; i += (int)offset) {
+        if (i + currentOffset < matr->size) {
+            matr->matrix[i + currentOffset] = -4;
+        }
+        if (
+            (i + 1 + currentOffset < matr->size) &&
+            (currentOffset % blockLength != blockLength - 1)
+        ) {
+            matr->matrix[i + 1 + currentOffset] = 1;
+        }
+        if (
+            (i - 1 + currentOffset > 0) &&
+            (currentOffset % blockLength != 0)
+        ) {
+            matr->matrix[i - 1 + currentOffset] = 1;
+        }
+        if (i + blockLength + currentOffset < fakeMatrixOneSize) {
+            matr->matrix[i + blockLength + currentOffset] = 1;
+        }
+        if (i - (int)blockLength + currentOffset >= fakeMatrixTwoSize) {
+            matr->matrix[i - blockLength + currentOffset] = 1;
+        }
+        ++currentOffset;
+    }
 }
 
 void DestroyMatrix(Matrix* matr) {
@@ -19,42 +51,6 @@ void DestroyMatrix(Matrix* matr) {
     free(matr->matrix);
     matr->blockLength = 0;
     matr->countBlocksInRow = 0;
-}
-
-void FillMatrix(Matrix* matr) {
-    assert(matr);
-    unsigned offset = matr->blockLength * matr->countBlocksInRow;
-    int currentOffset = 0;
-    unsigned long fakeMatrixOneSize =
-        (unsigned long)matr->blockLength * matr->blockLength *
-        (matr->countBlocksInRow - 1) * matr->countBlocksInRow;
-    long fakeMatrixTwoSize =
-        (long)matr->blockLength * matr->blockLength *
-        matr->countBlocksInRow;
-    for (int i = 0; i < matr->size; i += (int)offset) {
-        if (i + currentOffset < matr->size) {
-            matr->matrix[i + currentOffset] = -4;
-        }
-        if (
-            (i + 1 + currentOffset < matr->size) &&
-            (currentOffset % matr->blockLength != matr->blockLength - 1)
-        ) {
-            matr->matrix[i + 1 + currentOffset] = 1;
-        }
-        if (
-            (i - 1 + currentOffset > 0) &&
-            (currentOffset % matr->blockLength != 0)
-        ) {
-            matr->matrix[i - 1 + currentOffset] = 1;
-        }
-        if (i + matr->blockLength + currentOffset < fakeMatrixOneSize) {
-            matr->matrix[i + matr->blockLength + currentOffset] = 1;
-        }
-        if (i - (int)matr->blockLength + currentOffset >= fakeMatrixTwoSize) {
-            matr->matrix[i - matr->blockLength + currentOffset] = 1;
-        }
-        ++currentOffset;
-    }
 }
 
 void PrintMatrix(Matrix* matr) {
