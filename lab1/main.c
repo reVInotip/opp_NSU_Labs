@@ -1,5 +1,6 @@
 #include "parser/parser.h"
 #include "matrix/matrix.h"
+#include "vector/vectror.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -12,11 +13,13 @@ int main(int argc, char** argv) {
         return code;
     }
 
-    Matrix matr;
-    printf("%u\n", blockLength * blockWidth);
-    InitMatrix(&matr, blockLength, blockWidth);
-    PrintMatrix(&matr);
-    DestroyMatrix(&matr);
+    Vector vec;
+    InitVector(&vec, blockLength * blockWidth);
+    PrintVector(&vec);
+    FillVector(&vec);
+    printf("------\n");
+    PrintVector(&vec);
+    DestoryVector(&vec);
 
     return EXIT_SUCCESS;
 }

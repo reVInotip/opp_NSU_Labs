@@ -48,12 +48,14 @@ void InitMatrix(Matrix* matr, const unsigned blockLength, unsigned countBlocksIn
 
 void DestroyMatrix(Matrix* matr) {
     assert(matr);
+    assert(matr->matrix);
     free(matr->matrix);
+    matr->matrix = NULL;
     matr->blockLength = 0;
     matr->countBlocksInRow = 0;
 }
 
-void PrintMatrix(Matrix* matr) {
+void PrintMatrix(const Matrix* matr) {
     assert(matr);
     for (unsigned i = 0; i < matr->size; ++i) {
         if (i % (matr->blockLength * matr->countBlocksInRow) == 0) {
