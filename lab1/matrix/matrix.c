@@ -1,4 +1,5 @@
 #include "matrix.h"
+#include "../vector/vectror.h"
 #include <assert.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -64,4 +65,24 @@ void PrintMatrix(const Matrix* matr) {
         printf("%d ", matr->matrix[i]);
     }
     printf("\n");
+}
+
+void MultMatrixOnVector(Vector* result, const Vector* vec, const Matrix* matr) {
+    assert(result);
+    assert(vec);
+    assert(matr);
+
+    unsigned matrRowLength = matr->blockLength * matr->countBlocksInRow;
+    if (
+        (matrRowLength != vec->length) ||
+        (result->length != vec->length)
+    ) {
+        return;
+    }
+
+    for (int i = 0; i < matrRowLength; ++i) {
+        for (int j = 0; j < matrRowLength; ++j) {
+            result->data[i] += vec->data[i] * matr->matrix[matrRowLength * i + j];
+        }
+    }
 }
