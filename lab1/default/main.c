@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define E 0.00001
+const double E = 0.00001;
 
 void IterationAlgo(Vector* x, const Vector* b, const Matrix* A) {
     Vector r;
@@ -24,7 +24,7 @@ void IterationAlgo(Vector* x, const Vector* b, const Matrix* A) {
     Subtraction(&r, b, &res);
     Copy(&z, &r);
 
-    while (Norm(&r)/Norm(b) < E) {
+    while (Norm(&r)/Norm(b) > E) {
         const double mult = ScalarProduct(&r, &r);
 
         MultMatrixOnVector(&res, &z, A);
@@ -68,6 +68,11 @@ int main(int argc, char** argv) {
     FillVector(&b);
 
     IterationAlgo(&x, &b, &A);
+    printf("Matrix A\n");
+    PrintMatrix(&A);
+    printf("\n vector b\n");
+    PrintVector(&b);
+    printf("\nvector x (answer)\n");
     PrintVector(&x);
 
     DestoryVector(&x);

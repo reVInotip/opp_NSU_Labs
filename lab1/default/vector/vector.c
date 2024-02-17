@@ -7,7 +7,7 @@
 
 void InitVector(Vector* vec, const unsigned length) {
     assert(vec);
-    vec->data = calloc((unsigned long)length, sizeof(int));
+    vec->data = calloc((unsigned long)length, sizeof(double));
     vec->length = length;
 }
 
@@ -24,7 +24,7 @@ void FillVector(Vector *vec) {
     assert(vec->data);
     srand(time(NULL));
 
-    const unsigned countNumbers = (unsigned int)(vec->length * 0.2);
+    const unsigned countNumbers = (unsigned int)(vec->length * 0.2) + 1;
     unsigned index = 0;
     int value = 0;
     for (unsigned i = 0; i < countNumbers; ++i) {

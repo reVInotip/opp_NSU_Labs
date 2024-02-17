@@ -77,12 +77,13 @@ void MultMatrixOnVector(Vector* result, const Vector* vec, const Matrix* matr) {
         (matrRowLength != vec->length) ||
         (result->length != vec->length)
     ) {
+        printf("bad args\n");
         return;
     }
 
     for (int i = 0; i < matrRowLength; ++i) {
         for (int j = 0; j < matrRowLength; ++j) {
-            result->data[i] += vec->data[i] * matr->matrix[matrRowLength * i + j];
+            result->data[i] += vec->data[j] * (double)matr->matrix[matrRowLength * i + j];
         }
     }
 }
