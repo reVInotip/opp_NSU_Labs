@@ -148,4 +148,5 @@ ipch/
 .clang-format
 .clang-tidy
 .editorconfig
-lab1/default/executable
+old
+lab1/executable
