@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <limits.h>
 
 #ifdef DEFAULT
 #include <time.h>
@@ -168,12 +169,9 @@ int main(int argc, char** argv) {
     }
     Matrix A;
     InitMatrix(&A, plateLength, plateWidth);
-    printf("Matrix A\n");
-    PrintMatrix(&A);
 
     Vector x;
     Vector b;
-    InitVector(&x, plateLength * plateWidth);
     InitVector(&b, plateLength * plateWidth);
     #ifdef RANDOM
     FillVector(&b);
@@ -185,18 +183,26 @@ int main(int argc, char** argv) {
     free(sumRows);
     #endif
 
-    double workTime = IterationAlgo(&x, &b, &A);
-
-    printf("\n vector b\n");
-    PrintVector(&b);
-    printf("\nvector x (answer)\n");
-    PrintVector(&x);
+    int countThreads[5] = {1, 2, 4, 8, 12};
+    double minTimes[5] = {INT_MAX, INT_MAX, INT_MAX, INT_MAX, INT_MAX};
+    double workTime = 0;
 
     printf("==============\n");
-    printf("Time taken: %lf sec.\n", workTime);
-    printf("==============\n");
+    for (int j = 0; j < 5; ++j) {
+        omp_set_num_threads(countThreads[j]);
+        for (int i = 0; i < 5; ++i) {
+            InitVector(&x, plateLength * plateWidth);
+            workTime = IterationAlgo(&x, &b, &A);
+            if (minTimes[j] > workTime) {
+                minTimes[j] = workTime;
+            }
+            DestoryVector(&x);
+        }
+        printf("Time taken: %lf sec. Count threads: %d\n", minTimes[j], countThreads[j]);
+        printf("==============\n");
+    }
 
-    DestoryVector(&x);
+   
     DestoryVector(&b);
     DestroyMatrix(&A);
 

@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <limits.h>
 
 #ifdef DEFAULT
 #include <time.h>
@@ -52,7 +53,7 @@ double IterationAlgo(Vector* x, Vector* b, const Matrix* A) {
     SubtractionWithMultOnConst(&r, b, &res, 1, 1);
     Copy(&z, &r);
 
-    #pragma omp parallel for reduction(+:normB) reduction(+:normR)
+    #pragma omp parallel for schedule(static) reduction(+:normB) reduction(+:normR)
     for (int i = 0; i < b->length; ++i) {
         normB += b->data[i] * b->data[i];
         normR += r.data[i] * r.data[i];
@@ -89,7 +90,7 @@ double IterationAlgo(Vector* x, Vector* b, const Matrix* A) {
         SubtractionWithMultOnConst(&r, b, &res, 1, 1);
         Copy(&z, &r);
 
-        #pragma omp for reduction(+:normB) reduction(+:normR)
+        #pragma omp for schedule(static) reduction(+:normB) reduction(+:normR)
         for (int i = 0; i < b->length; ++i) {
             normB += b->data[i] * b->data[i];
             normR += r.data[i] * r.data[i];
@@ -110,7 +111,7 @@ double IterationAlgo(Vector* x, Vector* b, const Matrix* A) {
             #pragma omp single
             result = 0;
 
-            #pragma omp for reduction(+:result)
+            #pragma omp for schedule(static) reduction(+:result)
             for (int i = 0; i < res.length; ++i) {
                 result += res.data[i] * z.data[i];
             }
@@ -125,7 +126,7 @@ double IterationAlgo(Vector* x, Vector* b, const Matrix* A) {
             #pragma omp single
             productR = 0;
 
-            #pragma omp for reduction(+:productR)
+            #pragma omp for schedule(static) reduction(+:productR)
             for (int i = 0; i < r.length; ++i) {
                 productR += r.data[i] * r.data[i];
             }
@@ -168,12 +169,10 @@ int main(int argc, char** argv) {
     }
     Matrix A;
     InitMatrix(&A, plateLength, plateWidth);
-    printf("Matrix A\n");
-    PrintMatrix(&A);
 
     Vector x;
     Vector b;
-    InitVector(&x, plateLength * plateWidth);
+    
     InitVector(&b, plateLength * plateWidth);
     #ifdef RANDOM
     FillVector(&b);
@@ -184,19 +183,24 @@ int main(int argc, char** argv) {
     FillVector(&b, sumRows);
     free(sumRows);
     #endif
-
-    double workTime = IterationAlgo(&x, &b, &A);
-
-    printf("\n vector b\n");
-    PrintVector(&b);
-    printf("\nvector x (answer)\n");
-    PrintVector(&x);
+    
+    double workTime = INT_MAX, time = 0;
+    for (int i = 0; i < 5; ++i) {
+        omp_set_num_threads(4);
+        InitVector(&x, plateLength * plateWidth);
+        time = IterationAlgo(&x, &b, &A);
+        if (time < workTime) {
+            workTime = time;
+        }
+        //printf("\nvector x (answer)\n");
+        //PrintVector(&x);
+        DestoryVector(&x);
+    }
 
     printf("==============\n");
-    printf("Time taken: %lf sec.\n", workTime);
+    printf("Time taken: %lf sec. Count threads: %d\n", workTime, 4);
     printf("==============\n");
 
-    DestoryVector(&x);
     DestoryVector(&b);
     DestroyMatrix(&A);
 

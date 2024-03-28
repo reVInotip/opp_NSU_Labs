@@ -26,32 +26,35 @@ void DestoryVector(Vector* vec) {
 }
 
 #ifdef RANDOM
-    void FillVector(Vector *vec) {
-        assert(vec);
-        assert(vec->data);
-        srand(time(NULL));
+void FillVector(Vector *vec) {
+    assert(vec);
+    assert(vec->data);
+    srand(time(NULL));
 
-        const unsigned countNumbers = (unsigned int)(vec->length * 0.2) + 1;
-        unsigned index = 0;
-        int value = 0;
-        for (unsigned i = 0; i < countNumbers; ++i) {
-            index = rand() % (vec->length);
-            value = (rand() % FAKE_BORDER) - REAL_BORDER;
-            vec->data[index] = value;
-        }
+    const unsigned countNumbers = (unsigned int)(vec->length * 0.2) + 1;
+    unsigned index = 0;
+    int value = 0;
+    for (unsigned i = 0; i < countNumbers; ++i) {
+        index = rand() % (vec->length);
+        value = (rand() % FAKE_BORDER) - REAL_BORDER;
+        vec->data[index] = value;
     }
-#elifdef STATIC
-    void FillVector(Vector *vec, const int* rowSums) {
-        assert(vec);
-        assert(vec->data);
+}
+#elif defined(STATIC)
+void FillVector(Vector *vec, const int* rowSums) {
+    assert(vec);
+    assert(vec->data);
 
-        for (unsigned i = 0; i < vec->length; ++i) {
-            vec->data[i] = rowSums[i];
-        }
+    for (unsigned i = 0; i < vec->length; ++i) {
+        vec->data[i] = rowSums[i];
     }
+}
 #endif
 
-void Subtraction(Vector *result, const Vector *vec1, const Vector *vec2) {
+void SubtractionWithMultOnConst(
+    Vector* result, Vector* vec1, Vector* vec2,
+    const double constantForVec1, const double constantForVec2
+) {
     assert(result);
     assert(vec1);
     assert(vec2);
@@ -62,16 +65,21 @@ void Subtraction(Vector *result, const Vector *vec1, const Vector *vec2) {
     }
 
     #ifdef OpenMP_V1
-        #pragma omp parallel for
-    #elifdef OpenMP_V2
-        #pragma omp for
+    #pragma omp parallel for schedule(static)
+    #elif defined(OpenMP_V2)
+    #pragma omp for schedule(static)
     #endif
     for (unsigned i = 0; i < minLength; ++i) {
+        vec1->data[i] *= constantForVec1;
+        vec2->data[i] *= constantForVec2;
         result->data[i] = vec1->data[i] - vec2->data[i];
     }
 }
 
-void Addition(Vector* result, const Vector* vec1, const Vector* vec2) {
+void AdditionWithMultOnConst(
+    Vector* result, Vector* vec1, Vector* vec2,
+    const double constantForVec1, const double constantForVec2
+) {
     assert(result);
     assert(vec1);
     assert(vec2);
@@ -82,11 +90,13 @@ void Addition(Vector* result, const Vector* vec1, const Vector* vec2) {
     }
 
     #ifdef OpenMP_V1
-        #pragma omp parallel for
-    #elifdef OpenMP_V2
-        #pragma omp for
+    #pragma omp parallel for schedule(static)
+    #elif defined(OpenMP_V2)
+    #pragma omp for schedule(static)
     #endif
     for (unsigned i = 0; i < minLength; ++i) {
+        vec1->data[i] *= constantForVec1;
+        vec2->data[i] *= constantForVec2;
         result->data[i] = vec1->data[i] + vec2->data[i];
     }
 }
@@ -106,9 +116,9 @@ void Copy(Vector* result, const Vector* vec) {
     result->length = vec->length;
 
     #ifdef OpenMP_V1
-        #pragma omp parallel for
-    #elifdef OpenMP_V2
-        #pragma omp for
+    #pragma omp parallel for schedule(static)
+    #elif defined(OpenMP_V2)
+    #pragma omp for schedule(static)
     #endif
     for (unsigned i = 0; i < vec->length; ++i) {
         result->data[i] = vec->data[i];
@@ -122,13 +132,9 @@ double ScalarProduct(const Vector* vec1, const Vector* vec2) {
     assert(vec2->data);
 
     const unsigned minLength = vec1->length > vec2->length ? vec2->length : vec1->length;
-    double result = 0; //todo
+    double result = 0;
 
-    #ifdef OpenMP_V1
-        #pragma omp parallel for reduction(+:result)
-    #elifdef OpenMP_V2
-        //#pragma omp for
-    #endif
+    #pragma omp parallel for schedule(static) reduction(+:result)
     for (int i = 0; i < minLength; ++i) {
         result += vec1->data[i] * vec2->data[i];
     }
@@ -136,32 +142,13 @@ double ScalarProduct(const Vector* vec1, const Vector* vec2) {
     return result;
 }
 
-double Norm(const Vector* vec) {
-    assert(vec);
-    assert(vec->data);
-
-    double result = 0;
-
-    #ifdef OpenMP_V1
-        #pragma omp parallel for reduction(+:result)
-    #elifdef OpenMP_V2
-        //#pragma omp for
-    #endif
-    for (int i = 0; i < vec->length; ++i) {
-        result += vec->data[i] * vec->data[i];
-    }
-
-    result = sqrt(result);
-    return result;
-}
-
 void MultOnConst(Vector* result, const double value) {
     assert(result);
 
     #ifdef OpenMP_V1
-        #pragma omp parallel for
-    #elifdef OpenMP_V2
-        #pragma omp for
+    #pragma omp parallel for schedule(static)
+    #elif defined(OpenMP_V2)
+    #pragma omp for schedule(static)
     #endif
     for (int i = 0; i < result->length; ++i) {
         result->data[i] *= value;

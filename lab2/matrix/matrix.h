@@ -17,5 +17,5 @@ void PrintMatrix(const Matrix* matr);
 void MultMatrixOnVector(Vector* result, const Vector* vec, const Matrix* matr);
 
 #ifdef STATIC
-    void SumRows(int* sumRows, const Matrix* matr);
+void SumRows(int* sumRows, const Matrix* matr);
 #endif

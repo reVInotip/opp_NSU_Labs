@@ -72,9 +72,9 @@ void MultMatrixOnVector(Vector* result, const Vector* vec, const Matrix* matr) {
     }
 
     #ifdef OpenMP_V1
-        #pragma omp parallel for collapse(2)
-    #elifdef OpenMP_V2
-        #pragma omp for collapse(2)
+    #pragma omp parallel for schedule(static) collapse(2)
+    #elif defined(OpenMP_V2)
+    #pragma omp for schedule(static) collapse(2)
     #endif
     for (int i = 0; i < matrRowLength; ++i) {
         for (int j = 0; j < matrRowLength; ++j) {
@@ -95,13 +95,13 @@ void PrintMatrix(const Matrix* matr) {
 }
 
 #ifdef STATIC
-    void SumRows(int* sumRows, const Matrix* matr) {
-        const unsigned matrRowLength = matr->blockLength * matr->countBlocksInRow;
+void SumRows(int* sumRows, const Matrix* matr) {
+    const unsigned matrRowLength = matr->blockLength * matr->countBlocksInRow;
 
-        for (unsigned i = 0; i < matr->blockLength * matr->countBlocksInRow; ++i) {
-            for (unsigned j = 0; j < matrRowLength; ++j) {
-                sumRows[i] += matr->matrix[matrRowLength * i + j];
-            }
+    for (unsigned i = 0; i < matr->blockLength * matr->countBlocksInRow; ++i) {
+        for (unsigned j = 0; j < matrRowLength; ++j) {
+            sumRows[i] += matr->matrix[matrRowLength * i + j];
         }
     }
+}
 #endif
