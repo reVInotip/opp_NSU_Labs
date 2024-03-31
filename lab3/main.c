@@ -140,11 +140,11 @@ int main(int argc, char **argv) {
 
     // send A by X coordinate
     if (coords[0] == 0) {
-        MPI_Scatter(A, subA->size , MPI_DOUBLE, subA, subA->size, MPI_DOUBLE, 0, commColumns);
+        //printf("Size %d\n", subA->size);
+        MPI_Scatter(A->data, subA->size , MPI_DOUBLE, subA->data, subA->size, MPI_DOUBLE, 0, commRows);
     }
 
-    // MPI_Comm_rank(commColumns, &rank);
-    MPI_Bcast(subA, subA->size, MPI_DOUBLE, 0, commRows);
+    MPI_Bcast(subA->data, subA->size, MPI_DOUBLE, 0, commRows);
 
     printf("Rank: %d\n", rank);
     printMatrix(subA);
