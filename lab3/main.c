@@ -36,12 +36,6 @@ int main(int argc, char **argv) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &totalProcessesNumber);
 
-    if (totalProcessesNumber % 2) {
-        fprintf(stderr, "Invalid processes count!\n");
-        MPI_Finalize();
-        return INCORRECT_PROCESS_COUNT;
-    }
-
     // create new communicators
     MPI_Comm comm2D, commRows, commColumns;
 
