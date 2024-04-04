@@ -3,116 +3,64 @@
 #include <errno.h>
 #include <assert.h>
 #include <stdlib.h>
+#include <time.h>
+#include <stdbool.h>
 
-// 0 - width, 1 - height
-void getMatrSizeParametrs(FILE *dataFile, int parametrs[2]) {
-    char character;
-    int isEOF = 0;
-    while ((character = fgetc(dataFile)) != EOF) {
-        if (character == 'w') {
-            isEOF = fscanf(dataFile, " %d", &parametrs[0]);
-        } else if (character == 'h') {
-            isEOF = fscanf(dataFile, " %d", &parametrs[1]);
-        }
-
-        if (isEOF == EOF) {
-            break;
-        }
-
-        if ((parametrs[0] != -1) && (parametrs[1] != -1)) {
-            break;
-        }
-    }
-}
-
-Matrix createMatrixFromFile(const char *fileName, int *errCode) {
-    assert(fileName);
+Matrix createMatrix(unsigned height, unsigned width, int *errCode) {
     assert(errCode);
-
-    FILE *dataFile = fopen(fileName, "r");
-    if (!dataFile) {
-        fprintf(stderr, "File %s not found!\n", fileName);
-        *errCode = FILE_NOT_FOUND_ERR;
-        return NULL;
-    }
-
-    int matrParametrs[2] = {-1, -1};
-    getMatrSizeParametrs(dataFile, matrParametrs);
-
-    if (matrParametrs[0] == -1) {
-        fclose(dataFile);
-        fprintf(stderr, "Not found matrix width error!\n");
-        *errCode = NOT_FOUND_MATRIX_WIDTH_ERR;
-        return NULL;
-    } else if (matrParametrs[0] == -1) {
-        fclose(dataFile);
-        fprintf(stderr, "Not found matrix height error!\n");
-        *errCode = NOT_FOUND_MATRIX_HEIGHT_ERR;
-        return NULL;
-    }
 
     Matrix matrix = (Matrix)malloc(sizeof(struct matrix));
     if (!matrix) {
-        fclose(dataFile);
         fprintf(stderr, "Allocate memory error!\n");
         *errCode = ALLOCATE_MEMORY_ERR;
         return NULL;
     }
 
-    matrix->width = matrParametrs[0];
-    matrix->height = matrParametrs[1];
-    matrix->size = matrParametrs[0] * matrParametrs[1];
+    matrix->height = height;
+    matrix->width = width;
+    matrix->size = height * width;
 
-    double *buffer = (double*)malloc(matrix->size * sizeof(double));
-    if (!buffer) {
-        free(matrix);
-        fclose(dataFile);
-        fprintf(stderr, "Allocate memory error!\n");
-        *errCode = ALLOCATE_MEMORY_ERR;
-        return NULL;
-    }
-
-    for (unsigned i = 0; i < matrix->size; ++i) {
-        if (fscanf(dataFile, "%lf", &buffer[i]) == EOF) {
+    if (matrix->size) {
+        double *buffer = (double*)malloc(matrix->size * sizeof(double));
+        if (!buffer) {
             free(matrix);
-            free(buffer);
-            fclose(dataFile);
-            fprintf(stderr, "Count elemets is not equal to matrix size!\n");
-            *errCode = DATA_LESS_THEN_MATRIX_SIZE_ERR;
+            fprintf(stderr, "Allocate memory error!\n");
+            *errCode = ALLOCATE_MEMORY_ERR;
             return NULL;
         }
+        matrix->data = buffer;
+    } else {
+        matrix->data = NULL;
     }
 
-    fclose(dataFile);
-
-    matrix->data = buffer;
     return matrix;
 }
 
-Matrix createMatrix(const unsigned width, const unsigned height, int *errCode) {
+void resizeMatrix(Matrix matrix, const unsigned width, const unsigned height, int *errCode) {
     assert(errCode);
-
-    Matrix matrix = (Matrix)malloc(sizeof(struct matrix));
-    if (!matrix) {
-        fprintf(stderr, "Allocate memory error!\n");
-        *errCode = ALLOCATE_MEMORY_ERR;
-        return NULL;
-    }
 
     matrix->width = width;
     matrix->height = height;
     matrix->size = width * height;
 
-    double *buffer = (double*)malloc(matrix->size * sizeof(double));
+    double *buffer = (double*)realloc(matrix->data, matrix->size * sizeof(double));
     if (!buffer) {
         free(matrix);
         fprintf(stderr, "Allocate memory error!\n");
         *errCode = ALLOCATE_MEMORY_ERR;
-        return NULL;
+        return;
     }
 
     matrix->data = buffer;
-    return matrix;
+}
+
+void fillMatrix(Matrix matrix, int seed) {
+    assert(matrix);
+
+    srand(seed);
+    for (int i = 0; i < matrix->size; ++i) {
+        matrix->data[i] = (double)((rand() % 50) - 25);
+    }
 }
 
 void destroyMatrix(Matrix matrix) {
@@ -134,4 +82,55 @@ void printMatrix(const Matrix matrix) {
         printf("%lf ", matrix->data[i]);
     }
     printf("\n");
+}
+
+void copy(Matrix dest, const Matrix matrix) {
+    for (int i = 0; i < matrix->height; ++i) {
+        for (int j = 0; j < matrix->width; ++j) {
+            dest->data[i * dest->width + j] = matrix->data[i * matrix->width + j];
+        }
+    }
+}
+
+void multTransposeMatrixOnMatrix(Matrix result, const Matrix first, const Matrix second) {
+    unsigned width = (first->width > second->width) * second->width + (first->width <= second->width) * first->width;
+    for (int col = 0; col < result->height; ++col) {
+        for (int row = 0; row < result->width; ++row) {
+            result->data[col * result->width + row] = 0;
+            for (int k = 0; k < width; ++k) {
+                result->data[col * result->width + row] += first->data[col * first->width + k] * second->data[row * second->width + k];
+            }
+        }
+    }
+}
+
+void multMatrixOnMatrix(Matrix result, const Matrix first, const Matrix second) {
+    unsigned width = (first->width > second->width) * first->width + (first->width <= second->width) * second->width;
+    for (int col = 0; col < result->height; ++col) {
+        for (int row = 0; row < result->width; ++row) {
+            result->data[col * result->width + row] = 0;
+            for (int k = 0; k < width; ++k) {
+                result->data[col * result->width + row] += first->data[col * first->width + k] * second->data[k * second->width + row];
+            }
+        }
+    }
+}
+
+bool isCorrectCalcualtion(const Matrix first, const Matrix second) {
+    bool isCorrect = false;
+    unsigned width = (first->width == second->width) * first->width;
+    unsigned height = (first->height == second->height) * first->height;
+    if (!width || !height) {
+        return false;
+    }
+
+    for (int col = 0; col < height; ++col) {
+        for (int row = 0; row < width; ++row) {
+            if (first->data[col * width + row] != second->data[col * width + row]) {
+                return false;
+            }
+        }
+    }
+
+    return true;
 }

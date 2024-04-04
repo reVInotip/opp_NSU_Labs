@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdbool.h>
+
 typedef struct matrix {
     double* data;
     unsigned width;
@@ -8,15 +10,16 @@ typedef struct matrix {
 }* Matrix;
 
 enum ERR_CODE_MATRIX {
-    FILE_NOT_FOUND_ERR = 10,
-    ALLOCATE_MEMORY_ERR = 11,
-    NOT_FOUND_MATRIX_WIDTH_ERR = 12,
-    NOT_FOUND_MATRIX_HEIGHT_ERR = 13,
-    DATA_LESS_THEN_MATRIX_SIZE_ERR = 14
+    ALLOCATE_MEMORY_ERR = 10,
+    DATA_LESS_THEN_MATRIX_SIZE_ERR = 11
 };
 
-Matrix createMatrixFromFile(const char *fileName, int *errCode);
-Matrix createMatrix(const unsigned width, const unsigned height, int *errCode);
+Matrix createMatrix(unsigned height, unsigned width, int *errCode);
+void fillMatrix(Matrix matrix, int seed);
+void resizeMatrix(Matrix matrix, const unsigned width, const unsigned height, int *errCode);
 void destroyMatrix(Matrix matrix);
-void multMatrixOnMatrix(Matrix result, Matrix first, Matrix second);
+void multTransposeMatrixOnMatrix(Matrix result, const Matrix first, const Matrix second);
+void multMatrixOnMatrix(Matrix result, const Matrix first, const Matrix second);
 void printMatrix(const Matrix matrix);
+void copy(Matrix dest, const Matrix matrix);
+bool isCorrectCalcualtion(const Matrix first, const Matrix second);

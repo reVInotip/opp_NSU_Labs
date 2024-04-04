@@ -1,32 +1,54 @@
 #include "matrix/matrix.h"
+#include "parser/parser.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <stddef.h>
 #include <mpi.h>
+
+#define A_SEED 1239032
+#define B_SEED 5982847
+#define SIZE_CAP 200
 
 enum ERR_CODE_MAIN {
     WRONG_MARTIX_SIZE_ERR = 20,
-    CANT_DIVIDE_MATRIX_ON_SUBMATRIX_ERR = 21
+    INCORRECT_CALCULATION = 21,
+    INCORRECT_PROCESS_COUNT = 22,
+    OK = 0
 };
+
+typedef struct {
+    // A height
+    unsigned aHeight;
+    // B width
+    unsigned bWidth;
+    // length of other sides of both matrices
+    unsigned side;
+} MatrixSizes;
+
 
 int main(int argc, char **argv) {
     int errorCode = 0;
-    unsigned matrixSizes[3] = {0, 0, 0};
     int dims[2]={0, 0};
+    int totalProcessesNumber;
     int rank;
     
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &totalProcessesNumber);
 
-    // create new communicator
+    if (totalProcessesNumber % 2) {
+        fprintf(stderr, "Invalid processes count!\n");
+        MPI_Finalize();
+        return INCORRECT_PROCESS_COUNT;
+    }
+
+    // create new communicators
     MPI_Comm comm2D, commRows, commColumns;
 
-    int size;
-    int periods[2] = {0,0};
-    MPI_Comm_size(MPI_COMM_WORLD, &size);
-    MPI_Dims_create(size, 2, dims);
-    MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, 1, &comm2D);
     
-    MPI_Comm_rank(comm2D, &rank);
+    int periods[2] = {0,0};
+    MPI_Dims_create(totalProcessesNumber, 2, dims);
+    MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, 1, &comm2D);
 
     // create subcommunicatros, 0 - x, 1 - y
     int remainDimsForRows[2] = {1, 0};
@@ -34,130 +56,191 @@ int main(int argc, char **argv) {
     MPI_Cart_sub(comm2D, remainDimsForRows, &commRows);
     MPI_Cart_sub(comm2D, remainDimsForColumns, &commColumns);
 
-    int defaultRank, comm2DRank, commRowsRank, commColumnsRank;
-    MPI_Comm_rank(MPI_COMM_WORLD, &defaultRank);
-    MPI_Comm_rank(comm2D, &comm2DRank);
-    MPI_Comm_rank(commRows, &commRowsRank);
-    MPI_Comm_rank(commColumns, &commColumnsRank);
-
     int coords[2] = {0, 0};
     MPI_Cart_coords(comm2D, rank, 2, coords);
 
-    printf("Ranks: default - %d, comm2D - %d, commRows - %d, commColumns - %d, x - %d, y - %d\n",
-        defaultRank, comm2DRank, commRowsRank, commColumnsRank, coords[0], coords[1]);
-
-    Matrix A;
-    Matrix B;
-    Matrix C;
-
-    // create full matrix on 0 process
-    if (!rank) {
-        A = createMatrixFromFile("./A", &errorCode);
-        B = createMatrixFromFile("./B", &errorCode);
-        C = createMatrix(B->width, A->height, &errorCode);
-        if (errorCode) {
-            destroyMatrix(A);
-            destroyMatrix(B);
-            destroyMatrix(C);
-            return errorCode;
-        }
-
-        if ((A->width != B->height) || (B->width != C->width) || (A->height != C->height)) {
-            fprintf(stderr, "Can not multiply this matrices");
-            errorCode = WRONG_MARTIX_SIZE_ERR;
-            destroyMatrix(A);
-            destroyMatrix(B);
-            destroyMatrix(C);
-            return errorCode;
-        } else if (A->height % dims[0] != 0 || B->width % dims[1] != 0) {
-            fprintf(stderr, "Matrix sizes should be multiplies of count processes!");
-            errorCode = CANT_DIVIDE_MATRIX_ON_SUBMATRIX_ERR;
-            destroyMatrix(A);
-            destroyMatrix(B);
-            destroyMatrix(C);
-            return errorCode;
-        }
-
-        matrixSizes[0] = A->width;
-        matrixSizes[1] = B->width;
-        matrixSizes[2] = A->height;
-    }
-
-    MPI_Bcast(matrixSizes, 3, MPI_INT, 0, MPI_COMM_WORLD);
-
-    // create submatrices
-    unsigned subAHeight = matrixSizes[2] / dims[0];
-    unsigned subBWidth = matrixSizes[1] / dims[1];
-    Matrix subA = createMatrix(matrixSizes[0], subAHeight, &errorCode);
-    Matrix subB = createMatrix(subBWidth, matrixSizes[0], &errorCode);
-    Matrix subC = createMatrix(subBWidth, subAHeight, &errorCode);
+    // initialize matrices
+    Matrix A = createMatrix(0, 0, &errorCode);
+    Matrix B = createMatrix(0, 0, &errorCode);
+    Matrix C = createMatrix(0, 0, &errorCode);
     if (errorCode) {
-        destroyMatrix(subA);
-        destroyMatrix(subB);
-        destroyMatrix(subC);
         return errorCode;
     }
 
-    MPI_Datatype vectorTypeForB, vectorTypeForC;
+    MatrixSizes matrixSizes = {0, 0, 0};
 
-    int sendcountsForC[size], sendcountsForB[dims[1]];
-    int displsForC[size], displsForB[dims[1]];
+    // create type for struct matrixSizes
+    MPI_Datatype MATRIX_SIZES;
+    
+    int blocklengths[3] = {1, 1, 1};
+    MPI_Aint displacements[3] = {offsetof(MatrixSizes, aHeight), offsetof(MatrixSizes, bWidth), offsetof(MatrixSizes, side)};
+    MPI_Datatype types[3] = {MPI_UNSIGNED, MPI_UNSIGNED, MPI_UNSIGNED};
+    MPI_Type_create_struct(3, blocklengths, displacements, types, &MATRIX_SIZES);
+    MPI_Type_commit(&MATRIX_SIZES);
 
-    /*if (!rank) {
-        MPI_Datatype types[2];
-        // create MPI type for matrix B
-        MPI_Aint vectorSize;
-        MPI_Type_vector(matrixSizes[0], subBWidth, matrixSizes[1], MPI_DOUBLE, &types[0]);
-        MPI_Type_extent(types[0], &vectorSize);
-        MPI_Type_create_resized(types[0], 0, vectorSize, &vectorTypeForB);
-        MPI_Type_commit(&vectorTypeForB);
-
-        // calc displs and send counts for B
-        for (int i = 0; i < dims[1]; ++i) {
-            sendcountsForB[i] = 1;
-            displsForB[i] = i;
+    int heightsForSubA[totalProcessesNumber];
+    int widthsForSubB[totalProcessesNumber];
+    // create full matrix on 0 process
+    if (!rank) {
+        // parse matrices sizes
+        parseAgrs(argc, argv, &matrixSizes.bWidth, &matrixSizes.aHeight, &matrixSizes.side, &errorCode);
+        if (errorCode) {
+            return errorCode;
         }
 
-        // create MPI type for matrix C
-        MPI_Type_vector(matrixSizes[0] / dims[0], matrixSizes[1] / dims[1], matrixSizes[1], MPI_DOUBLE, &types[1]);
-        MPI_Type_extent(types[1], &vectorSize);
-        MPI_Type_create_resized(types[1], 0, vectorSize, &vectorTypeForC);
-        MPI_Type_commit(&vectorTypeForC);
-
-        // calc displs and send counts for C
-        for (int i = 0; i < dims[0]; ++i) {
-            for (int j = 0; j < dims[1]; ++j) {
-                sendcountsForC[i * dims[1] + j] = 1;
-                displsForC[i * dims[1] + j] = i * subBWidth + j;
-            }
+        resizeMatrix(A, matrixSizes.side, matrixSizes.aHeight, &errorCode);
+        resizeMatrix(B, matrixSizes.bWidth, matrixSizes.side, &errorCode);
+        resizeMatrix(C, matrixSizes.bWidth, matrixSizes.aHeight, &errorCode);
+        if (errorCode) {
+            return errorCode;
         }
-    }*/
+
+        fillMatrix(A, A_SEED);
+        fillMatrix(B, B_SEED);
+
+        int commRowsRank = 0;
+        int commColumnsRank = 0;
+        int coords2D[2] = {0, 0};
+        for (int i = 0; i < totalProcessesNumber; ++i) {
+            MPI_Cart_coords(comm2D, i, 2, coords2D);
+            MPI_Cart_rank(commRows, &coords2D[0], &commRowsRank);
+            MPI_Cart_rank(commColumns, &coords2D[1], &commColumnsRank);
+
+            heightsForSubA[i] = A->height / dims[0] + (A->height % dims[0] > commRowsRank);
+            widthsForSubB[i] = B->width / dims[1] + (B->width % dims[1] > commColumnsRank);
+        }
+    }
+
+    MPI_Bcast(&matrixSizes, 1, MATRIX_SIZES, 0, MPI_COMM_WORLD);
+    MPI_Bcast(heightsForSubA, totalProcessesNumber, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(widthsForSubB, totalProcessesNumber, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Type_free(&MATRIX_SIZES);
+
+    // create submatrices
+    unsigned subAHeight = heightsForSubA[rank];
+    unsigned subBWidth = widthsForSubB[rank];
+    Matrix subA = createMatrix(subAHeight, matrixSizes.side, &errorCode);
+    Matrix subB = createMatrix(subBWidth, matrixSizes.side, &errorCode); // transpose
+    Matrix subC = createMatrix(subAHeight, subBWidth, &errorCode);
+    if (errorCode) {
+        return errorCode;
+    }
 
     // send B by Y coordinate
-    //MPI_Scatterv(B, sendcountsForB, displsForB, vectorTypeForB, subB, subB->size, MPI_DOUBLE, 0, comm1D[1]);
+    if (coords[0] == 0) {
+        MPI_Datatype B_VECTOR_TYPE, type;
+        // create MPI type for matrix B
+        MPI_Aint lb, vectorSize;
+        MPI_Type_vector(matrixSizes.side, 1, matrixSizes.bWidth, MPI_DOUBLE, &type);
+        MPI_Type_create_resized(type, 0, sizeof(double), &B_VECTOR_TYPE);
+        MPI_Type_commit(&B_VECTOR_TYPE);
 
-    //MPI_Comm_rank(commRows, &rank);
+        int commColumnsProcessesNumber;
+        MPI_Comm_size(commColumns, &commColumnsProcessesNumber);
+
+        int displacementsForB[commColumnsProcessesNumber];
+        int countVectorsForB[commColumnsProcessesNumber];
+        int displ = 0;
+        for (int i = 0; i < commColumnsProcessesNumber; ++i) {
+            displacementsForB[i] = displ;
+            countVectorsForB[i] = matrixSizes.bWidth / dims[1] + (matrixSizes.bWidth % dims[1] > i);
+            displ += countVectorsForB[i];
+        }
+
+        MPI_Scatterv(B->data, countVectorsForB, displacementsForB, B_VECTOR_TYPE, subB->data, subB->size, MPI_DOUBLE, 0, commColumns);
+
+        MPI_Type_free(&type);
+        MPI_Type_free(&B_VECTOR_TYPE);
+    }
+    MPI_Bcast(subB->data, subB->size, MPI_DOUBLE, 0, commRows);
 
     // send A by X coordinate
-    if (coords[0] == 0) {
-        //printf("Size %d\n", subA->size);
-        MPI_Scatter(A->data, subA->size , MPI_DOUBLE, subA->data, subA->size, MPI_DOUBLE, 0, commRows);
-    }
+    if (coords[1] == 0) {
+        int commRowsProcessesNumber;
+        MPI_Comm_size(commRows, &commRowsProcessesNumber);
 
-    MPI_Bcast(subA->data, subA->size, MPI_DOUBLE, 0, commRows);
-
-    printf("Rank: %d\n", rank);
-    printMatrix(subA);
-
-    for (int k = 0; k < subC->size; ++k) {
-        for (int i = 0; i < subA->width; ++i) {
-            for (int j = 0; j < subB->height; ++j) {
-                subC->data[k] = subA->data[i * subA->width + j] + subB->data[j * subA->width + i];
-            }
+        int displacementsForA[commRowsProcessesNumber];
+        int sizesForA[commRowsProcessesNumber];
+        int displ = 0;
+        for (int i = 0; i < commRowsProcessesNumber; ++i) {
+            displacementsForA[i] = displ;
+            sizesForA[i] = (matrixSizes.aHeight / dims[0] + (matrixSizes.aHeight % dims[0] > i)) * matrixSizes.side;
+            displ += sizesForA[i];
         }
-    }
 
+        MPI_Scatterv(A->data, sizesForA, displacementsForA, MPI_DOUBLE, subA->data, subA->size, MPI_DOUBLE, 0, commRows);
+    }
+    MPI_Bcast(subA->data, subA->size, MPI_DOUBLE, 0, commColumns);
+
+    multTransposeMatrixOnMatrix(subC, subA, subB);
+
+    // gather matrix C
+    if (rank == 0) {
+        MPI_Datatype C_SUBARRAY_TYPE[totalProcessesNumber];
+        int senderCoords[2] = {0, 0};
+        for (int i = 1; i < totalProcessesNumber; ++i) {
+            int sizes[2] = {matrixSizes.aHeight, matrixSizes.bWidth};
+            int subsizes[2] = {heightsForSubA[i], widthsForSubB[i]};
+
+            MPI_Type_create_subarray(2, sizes, subsizes, senderCoords, MPI_ORDER_C, MPI_DOUBLE, &C_SUBARRAY_TYPE[i]);
+            MPI_Type_commit(&C_SUBARRAY_TYPE[i]);
+        }
+
+        copy(C, subC);
+        int displ = 0;
+        for (int i = 1; i < totalProcessesNumber; ++i) {
+            MPI_Cart_coords(comm2D, i, 2, senderCoords);
+
+            displ = senderCoords[0] * matrixSizes.bWidth * heightsForSubA[0] + senderCoords[1] * widthsForSubB[0];
+            MPI_Recv(&(C->data[displ]), 1, C_SUBARRAY_TYPE[i], i, 1, comm2D, MPI_STATUS_IGNORE);
+        }
+
+        for (int i = 1; i < totalProcessesNumber; ++i) {
+            MPI_Type_free(&C_SUBARRAY_TYPE[i]);
+        }
+    } else {
+        MPI_Send(subC->data, subC->size, MPI_DOUBLE, 0, 1, comm2D);
+    }
+    
+    int returnedValue = OK;
+    if (rank == 0) {
+        Matrix trueC = createMatrix(C->height, C->width, &errorCode);
+        if (errorCode) {
+            return errorCode;
+        }
+        
+        multMatrixOnMatrix(trueC, A, B);
+
+        if (trueC->size < SIZE_CAP) {
+            printf("Matrix A\n==================");
+            printMatrix(A);
+            printf("Matrix B\n==================");
+            printMatrix(B);
+            printf("Matrix C\n==================");
+            printMatrix(C);
+            printf("True matrix C\n==================");
+            printMatrix(trueC);
+        }
+
+        if (isCorrectCalcualtion(C, trueC)) {
+            printf("*********CORRECT*********\n");
+        } else {
+            printf("********INCORRECT********\n");
+            returnedValue = INCORRECT_CALCULATION;
+        }
+        
+        destroyMatrix(trueC);
+        destroyMatrix(A);
+        destroyMatrix(B);
+        destroyMatrix(C);
+    }
+    destroyMatrix(subA);
+    destroyMatrix(subB);
+    destroyMatrix(subC);
+    MPI_Comm_free(&comm2D);
+    MPI_Comm_free(&commRows);
+    MPI_Comm_free(&commColumns);
     MPI_Finalize();
 
-    return EXIT_SUCCESS;
+    return returnedValue;
 }
