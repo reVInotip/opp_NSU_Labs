@@ -111,7 +111,7 @@ void isCorrectCalculation(const double *funcValues, const Configuration conf) {
 
             for (int i = 0; i < conf.N[0]; ++i) {
                 coords[0] = i;
-                delta = (i * i + j * j + k * k) - (funcValues[k * conf.N[0] * conf.N[1] + j * conf.N[1] + i]);
+                delta = fabs((i * i + j * j + k * k) - (funcValues[k * conf.N[0] * conf.N[1] + j * conf.N[1] + i]));
 
                 if (delta >= conf.precision) {
                     printf("Incorrect value in (%d, %d, %d) node!\nCorrect: %d, result: %lf\nPrecision: %lf\n",
@@ -167,8 +167,9 @@ int main(int argc, char** argv) {
     
     //double phi[conf.N[0] * conf.N[1] * conf.N[2]] = {0};
     int status = 0;
+    unsigned lengthByCoord[3] = {conf.N[0], conf.N[1], conf.N[2] / totalProcessesNumber};
     Function phi = initFunction((conf.N[0] * conf.N[1] * conf.N[2]) / totalProcessesNumber +
-        ((conf.N[0] * conf.N[1] * conf.N[2]) % totalProcessesNumber > rank), (unsigned*)conf.N, &status);
+        ((conf.N[0] * conf.N[1] * conf.N[2]) % totalProcessesNumber > rank), (unsigned*)lengthByCoord, &status);
     
     if (status) {
         return EXIT_FAILURE;
@@ -261,7 +262,7 @@ int main(int argc, char** argv) {
             //printf("porno\n");
 
             int n = rank > 0 ? boundaryK[rank - 1] : 0;
-            virtualNodeCoords[2] = n;
+            virtualNodeCoords[2] = 0;
             for (int j = 0; j < conf.N[1]; ++j) {
                 virtualNodeCoords[1] = j;
 
@@ -279,7 +280,9 @@ int main(int argc, char** argv) {
                     }
 
                     values[0] = buffer[0].recieve[j * conf.N[1] + i];
+                    ++virtualNodeCoords[2];
                     values[1] = getPrevious(phi, virtualNodeCoords);
+                    --virtualNodeCoords[2];
 
                     result += (values[0] + values[1]) / conf.H[2];
                     
@@ -289,7 +292,7 @@ int main(int argc, char** argv) {
 
                     buffer[0].send[j * conf.N[1] + i] = result;
 
-                    printf("Res_%d_%d: %lf %lf val: %lf %lf, node: (%d %d %d)\n", z, rank, result, getPrevious(phi, virtualNodeCoords), values[0], values[1], i, j, n);
+                    //printf("Res_%d_%d: %lf %lf val: %lf %lf, node: (%d %d %d)\n", z, rank, result, getPrevious(phi, virtualNodeCoords), values[0], values[1], i, j, n);
 
                     if (fabs(result - getPrevious(phi, virtualNodeCoords)) > localMaxDiff) {
                         localMaxDiff = fabs(result - getPrevious(phi, virtualNodeCoords));
@@ -323,16 +326,18 @@ int main(int argc, char** argv) {
                         result += (values[0] + values[1]) / conf.H[m];
                     }
 
+                    --virtualNodeCoords[2];
                     values[0] = getPrevious(phi, virtualNodeCoords);
+                    ++virtualNodeCoords[2];
                     values[1] = buffer[1].recieve[j * conf.N[1] + i];
 
                     result += (values[0] + values[1]) / conf.H[2];
                     
                     // subtract right part
-                    result -= 6 - conf.a * (i * i + j * j);
+                    result -= 6 - conf.a * (i * i + j * j + (boundaryK[rank] - 1) * (boundaryK[rank] - 1));
                     result /= calculationConstant;
 
-                    printf("Res_%d_%d: %lf %lf val: %lf %lf, node: (%d %d %d)\n", z, rank, result, getPrevious(phi, virtualNodeCoords), values[0], values[1], i, j, boundaryK[rank]);
+                    //printf("Res_%d_%d: %lf %lf val: %lf %lf, node: (%d %d %d)\n", z, rank, result, getPrevious(phi, virtualNodeCoords), values[0], values[1], i, j, boundaryK[rank]);
 
                     buffer[1].send[j * conf.N[1] + i] = result;
 
@@ -352,12 +357,12 @@ int main(int argc, char** argv) {
             //printf("%.9f\n", maxDiff);
         }
 
+        swap(phi);
+
         if (z == 2) {
             break;
         }
         ++z;
-
-        swap(phi);
     }
 
     int recvcounts[totalProcessesNumber];
@@ -370,6 +375,13 @@ int main(int argc, char** argv) {
 
     double funcValues[conf.N[0] * conf.N[1] * conf.N[2]];
     MPI_Gatherv(getCurrentBuffer(phi), phi->size, MPI_DOUBLE, funcValues, recvcounts, displs, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    /*if (rank == 1) {
+        for (int i = 0; i < buffer[0].size; ++i) {
+            printf("r_%d %lf\n", rank, phi->data[phi->currentBufferIndex][i]);
+            //printf("%lf\n", buffer[0].recieve[i]);
+        }
+    }*/
     if (!rank) {
         isCorrectCalculation(funcValues, conf);
     }
