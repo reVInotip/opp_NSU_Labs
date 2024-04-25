@@ -28,7 +28,7 @@ typedef struct {
 
 int main(int argc, char **argv) {
     int errorCode = 0;
-    int dims[2]={0, 0};
+    int dims[2]={1, 16};
     int totalProcessesNumber;
     int rank;
     
@@ -39,9 +39,8 @@ int main(int argc, char **argv) {
     // create new communicators
     MPI_Comm comm2D, commRows, commColumns;
 
-    
     int periods[2] = {0,0};
-    MPI_Dims_create(totalProcessesNumber, 2, dims);
+    //MPI_Dims_create(totalProcessesNumber, 2, dims);
     MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, 1, &comm2D);
 
     // create subcommunicatros, 0 - x, 1 - y
@@ -120,6 +119,8 @@ int main(int argc, char **argv) {
         return errorCode;
     }
 
+    double start = MPI_Wtime();
+
     // send B by Y coordinate
     if (coords[0] == 0) {
         MPI_Datatype B_VECTOR_TYPE, type;
@@ -167,26 +168,36 @@ int main(int argc, char **argv) {
     MPI_Bcast(subA->data, subA->size, MPI_DOUBLE, 0, commColumns);
 
     multTransposeMatrixOnMatrix(subC, subA, subB);
-
+    
     // gather matrix C
     if (rank == 0) {
         MPI_Datatype C_SUBARRAY_TYPE[totalProcessesNumber];
         int senderCoords[2] = {0, 0};
+        int displByCoord[2] = {0, 0};
+
+        copy(C, subC);
         for (int i = 1; i < totalProcessesNumber; ++i) {
             int sizes[2] = {matrixSizes.aHeight, matrixSizes.bWidth};
             int subsizes[2] = {heightsForSubA[i], widthsForSubB[i]};
-
-            MPI_Type_create_subarray(2, sizes, subsizes, senderCoords, MPI_ORDER_C, MPI_DOUBLE, &C_SUBARRAY_TYPE[i]);
-            MPI_Type_commit(&C_SUBARRAY_TYPE[i]);
-        }
-
-        copy(C, subC);
-        int displ = 0;
-        for (int i = 1; i < totalProcessesNumber; ++i) {
             MPI_Cart_coords(comm2D, i, 2, senderCoords);
 
-            displ = senderCoords[0] * matrixSizes.bWidth * heightsForSubA[0] + senderCoords[1] * widthsForSubB[0];
-            MPI_Recv(&(C->data[displ]), 1, C_SUBARRAY_TYPE[i], i, 1, comm2D, MPI_STATUS_IGNORE);
+            for (int j = 0, k = 0; j < senderCoords[0]; ++j) {
+                k += (j % dims[0]) == dims[0] - 2 ? dims[0] : 0;
+                k %= dims[0];
+                displByCoord[0] += (heightsForSubA[k + j] != matrixSizes.aHeight) ? heightsForSubA[k + j] : 0;
+            }
+
+            for (int j = 0; j < senderCoords[1]; ++j) {
+                displByCoord[1] += (widthsForSubB[j] != matrixSizes.bWidth) ? widthsForSubB[j] : 0;
+            }
+
+            MPI_Type_create_subarray(2, sizes, subsizes, displByCoord, MPI_ORDER_C, MPI_DOUBLE, &C_SUBARRAY_TYPE[i]);
+            MPI_Type_commit(&C_SUBARRAY_TYPE[i]);
+
+            displByCoord[0] = 0;
+            displByCoord[1] = 0;
+
+            MPI_Recv(&(C->data[0]), 1, C_SUBARRAY_TYPE[i], i, 1, comm2D, MPI_STATUS_IGNORE);
         }
 
         for (int i = 1; i < totalProcessesNumber; ++i) {
@@ -195,9 +206,14 @@ int main(int argc, char **argv) {
     } else {
         MPI_Send(subC->data, subC->size, MPI_DOUBLE, 0, 1, comm2D);
     }
-    
+
+    double timeDiff = MPI_Wtime() - start;
+    MPI_Allreduce(MPI_IN_PLACE, &timeDiff, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    timeDiff /= totalProcessesNumber;
+
     int returnedValue = OK;
     if (rank == 0) {
+        printf("Time taken: %lf\n", timeDiff);
         Matrix trueC = createMatrix(C->height, C->width, &errorCode);
         if (errorCode) {
             return errorCode;
