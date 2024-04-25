@@ -7,13 +7,13 @@ enum ERR_CODE_FUNC {
     OK = 0
 };
 
-Function initFunction(const unsigned size, const unsigned lengthByCoord[3], int *status) {
+Function* initFunction(const unsigned size, const unsigned lengthByCoord[3], int *status) {
     if (size == 0) {
         *status = OK;
         return NULL;
     }
 
-    Function func = (Function)malloc(sizeof(struct function));
+    Function *func = (Function*)malloc(sizeof(Function));
     if (!func) {
         *status = MemoryAllocateError;
         return NULL;
@@ -44,7 +44,7 @@ Function initFunction(const unsigned size, const unsigned lengthByCoord[3], int 
     return func;
 }
 
-void destroyFunction(Function func) {
+void destroyFunction(Function *func) {
     assert(func);
 
     free(func->data[0]);
@@ -52,8 +52,8 @@ void destroyFunction(Function func) {
     free(func);
 }
 
-double getPrevious(const Function func, const int coords[3]) {
-    int index = coords[2] * func->lengthByCoord[0] * func->lengthByCoord[1] + coords[1] * func->lengthByCoord[1] + coords[0];
+double getPrevious(const Function *func, const int coords[3]) {
+    int index = coords[2] * func->lengthByCoord[0] * func->lengthByCoord[1] + coords[1] * func->lengthByCoord[0] + coords[0];
     if (coords[0] < 0 || coords[1] < 0 || coords[2] < 0 || index >= func->size) {
         return 0;
     }
@@ -61,12 +61,21 @@ double getPrevious(const Function func, const int coords[3]) {
     return func->data[(func->currentBufferIndex + 1) % 2][index];
 }
 
-double* getCurrentBuffer(const Function func) {
+double getCurrent(const Function *func, const int coords[3]) {
+    int index = coords[2] * func->lengthByCoord[0] * func->lengthByCoord[1] + coords[1] * func->lengthByCoord[0] + coords[0];
+    if (coords[0] < 0 || coords[1] < 0 || coords[2] < 0 || index >= func->size) {
+        return 0;
+    }
+
+    return func->data[func->currentBufferIndex][index];
+}
+
+double* getCurrentBuffer(const Function *func) {
     return func->data[func->currentBufferIndex];
 }
 
-void put(const Function func, const int coords[3], const double value) {
-    int index = coords[2] * func->lengthByCoord[0] * func->lengthByCoord[1] + coords[1] * func->lengthByCoord[1] + coords[0];
+void put(const Function *func, const int coords[3], const double value) {
+    int index = coords[2] * func->lengthByCoord[0] * func->lengthByCoord[1] + coords[1] * func->lengthByCoord[0] + coords[0];
     if (coords[0] < 0 || coords[1] < 0 || coords[2] < 0 || index >= func->size) {
         return;
     }
