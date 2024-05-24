@@ -13,7 +13,7 @@ void isCorrectCalculation(const double h[3], const NodeFunction *phi, const int 
         for (int j = 0; j < N_y; ++j) {
             for (int i = 0; i < N_x; ++i) {
 
-                delta = fabs(getFunctionValue(i, j, z, h) - getCurrentValue(phi, i, j, k));
+                delta = fabs(getFunctionValue(i, j, z, h) - getCurrentValue(phi, i, j, k, h));
 
                 if (delta > maxDelta) {
                     maxDelta = delta;
@@ -21,7 +21,7 @@ void isCorrectCalculation(const double h[3], const NodeFunction *phi, const int 
 
                 if (delta > DELTA_MAX) {
                     printf("Function value: %lf, result: %lf, node (%f, %f, %f)\n",
-                        getFunctionValue(i, j, z, h), getCurrentValue(phi, i, j, k), i * h[0] - 1, j * h[1] - 1, z * h[2] - 1);
+                        getFunctionValue(i, j, z, h), getCurrentValue(phi, i, j, k, h), i * h[0] - 1, j * h[1] - 1, z * h[2] - 1);
                 }
             }
         }
@@ -31,9 +31,9 @@ void isCorrectCalculation(const double h[3], const NodeFunction *phi, const int 
 
     if (!rank) {
         if (maxDelta > DELTA_MAX) {
-            printf("INCORRECT! Max delta: %lf\n", maxDelta);
+            printf("INCORRECT! Max delta: %.9lf\n", maxDelta);
         } else {
-            printf("CORRECT! Max delta: %lf\n", maxDelta);
+            printf("CORRECT! Max delta: %.9lf\n", maxDelta);
         }
     }
 }

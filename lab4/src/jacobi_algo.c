@@ -45,7 +45,8 @@
 #include <float.h>
 #include <stdio.h>
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv)
+{
     MPI_Init(&argc, &argv);
 
     int rank, totalProcessesNumber;
@@ -54,7 +55,8 @@ int main(int argc, char** argv) {
     MPI_Comm_size(MPI_COMM_WORLD, &totalProcessesNumber);
 
     int boundaryKForPrevRank = 0;
-    for (int i = 0; i < rank; ++i) {
+    for (int i = 0; i < rank; ++i)
+    {
         boundaryKForPrevRank = boundaryKForPrevRank + N_z / totalProcessesNumber + (N_z % totalProcessesNumber > i);
     }
 
@@ -65,7 +67,8 @@ int main(int argc, char** argv) {
     h[0] = (double)D_x / (N_x - 1);
     h[1] = (double)D_y / (N_y - 1);
     h[2] = (double)D_z / (N_z - 1);
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 3; ++i)
+    {
         squareH[i] = h[i] * h[i];
     }
 
@@ -78,97 +81,127 @@ int main(int argc, char** argv) {
     const int leftBorderByZ = (rank != 0);
 
     const double calculationConstant = 2.0 / squareH[0] + 2.0 / squareH[1] + 2.0 / squareH[2] + A;
-    
+
     int status = 0;
-    NodeFunction *phi = initNodeFunction((N_z / totalProcessesNumber + (N_z % totalProcessesNumber > rank)) *
-        N_x * N_y, totalProcessesNumber, rank, &status);
-    if (status) {
+    NodeFunction *phi = initNodeFunction((N_z / totalProcessesNumber + (N_z % totalProcessesNumber > rank)) * N_x * N_y,
+        totalProcessesNumber, rank, &status);
+    if (status)
+    {
         return EXIT_FAILURE;
     }
-    
+
     Buffer buffer[2];
-    if (rank != 0) {
+    if (rank != 0)
+    {
         initBuffer(&buffer[0], N_x * N_y);
     }
-    if (rank != totalProcessesNumber - 1) {
+    if (rank != totalProcessesNumber - 1)
+    {
         initBuffer(&buffer[1], N_x * N_y);
     }
 
     double start = MPI_Wtime();
 
-    while (maxDiff > EPSILON) {
+    while (maxDiff > EPSILON)
+    {
         localMaxDiff = EPSILON;
 
-        if (rank != 0) {
+        if (rank != 0)
+        {
             MPI_Isend(buffer[0].send, buffer[0].size, MPI_DOUBLE, rank - 1, 101, MPI_COMM_WORLD, &desc[0]);
-            MPI_Irecv(buffer[0].recieve, buffer[0].size, MPI_DOUBLE, rank - 1, MPI_ANY_TAG, MPI_COMM_WORLD, &desc[1]);
+            MPI_Irecv(buffer[0].recieve, buffer[0].size, MPI_DOUBLE, rank - 1, 103, MPI_COMM_WORLD, &desc[1]);
         }
-        
-        if (rank != totalProcessesNumber - 1) {
+
+        if (rank != totalProcessesNumber - 1)
+        {
             MPI_Isend(buffer[1].send, buffer[1].size, MPI_DOUBLE, rank + 1, 103, MPI_COMM_WORLD, &desc[2]);
-            MPI_Irecv(buffer[1].recieve, buffer[1].size, MPI_DOUBLE, rank + 1, MPI_ANY_TAG, MPI_COMM_WORLD, &desc[3]);
+            MPI_Irecv(buffer[1].recieve, buffer[1].size, MPI_DOUBLE, rank + 1, 101, MPI_COMM_WORLD, &desc[3]);
         }
 
         // calculating independent values in inner nodes
         int realZCoord = startZCoord;
-        for (int k = leftBorderByZ; k < rightBorderByZ; ++k) {
-            for (int j = 0; j < N_y; ++j) {
-                for (int i = 0; i < N_x; ++i) {
-
-                    result += (getPreviousValue(phi, i, j, k - 1) + getPreviousValue(phi, i, j, k + 1)) / squareH[2] +
-                        (getPreviousValue(phi, i, j - 1, k) + getPreviousValue(phi, i, j + 1, k)) / squareH[1] +
-                        (getPreviousValue(phi, i - 1, j, k) + getPreviousValue(phi, i + 1, j, k)) / squareH[0];
+        //printf("%d , %d, %d\n", leftBorderByZ, rightBorderByZ, phi->lengthByZCoord);
+        for (int k = leftBorderByZ; k < rightBorderByZ; ++k)
+        {
+            for (int j = 0; j < N_y; ++j)
+            {
+                for (int i = 0; i < N_x; ++i)
+                {
+                    int m = ((k == rightBorderByZ - 1) && (rank == totalProcessesNumber - 1)) ? realZCoord + 1 : k + 1;
+                    int m1 = ((j + 1) * h[1] > D_y) ? realZCoord : k;
+                    int m11 = (j - 1 < 0) ? realZCoord : k;
+                    int m2 = ((i + 1) * h[0] > D_x) ? realZCoord : k;
+                    int m22 = (i - 1 < 0) ? realZCoord : k;
+                    result = (getPreviousValue(phi, i, j, k - 1, h) + getPreviousValue(phi, i, j, m, h)) / squareH[2] +
+                              (getPreviousValue(phi, i, j - 1, m11, h) + getPreviousValue(phi, i, j + 1, m1, h)) / squareH[1] +
+                              (getPreviousValue(phi, i - 1, j, m22, h) + getPreviousValue(phi, i + 1, j, m2, h)) / squareH[0];
 
                     // subtract right part
                     result -= 6.0 - A * getFunctionValue(i, j, realZCoord, h);
                     result /= calculationConstant;
 
-                    if (fabs(result - getPreviousValue(phi, i, j, k)) > localMaxDiff) {
-                        localMaxDiff = fabs(result - getPreviousValue(phi, i, j, k));
+                    if (fabs(result - getPreviousValue(phi, i, j, k, h)) > localMaxDiff)
+                    {
+                        localMaxDiff = fabs(result - getPreviousValue(phi, i, j, k, h));
+                    }
+
+                    if (i * h[0] - 1 == 1 && j * h[1] - 1 == 1) {
+                        //printf("LMD_i: %lf (%lf %lf %lf), result: %lf, prev: %lf, k: (%d, %d, %d)\n",
+                        //  localMaxDiff, i * h[0] - 1, j * h[1] - 1, realZCoord * h[2] - 1, result, getPreviousValue(phi, i, j - 1, m1, h), i, j-1, m1);
                     }
 
                     put(phi, i, j, k, result);
-
-                    result = 0;
                 }
             }
 
             ++realZCoord;
         }
-        
+
         intermediateLocalMaxDiff = localMaxDiff;
 
         // waiting for recording buffer & calculating dependent on outer nodes inner nodes
-        if (rank != 0) {
+        if (rank != 0)
+        {
             MPI_Wait(&desc[0], MPI_STATUS_IGNORE);
             MPI_Wait(&desc[1], MPI_STATUS_IGNORE);
 
             realZCoord = boundaryKForPrevRank;
-            for (int j = 0; j < N_y; ++j) {
-                for (int i = 0; i < N_x; ++i) {
+            for (int j = 0; j < N_y; ++j)
+            {
+                for (int i = 0; i < N_x; ++i)
+                {
+                    int m = (phi->lengthByZCoord == 1 ? realZCoord : 0) + 1;
+                    int m1 = ((j + 1) * h[1] > D_y) ? realZCoord : 0;
+                    int m11 = (j - 1 < 0) ? realZCoord : 0;
+                    int m2 = ((i + 1) * h[0] > D_x) ? realZCoord : 0;
+                    int m22 = (i - 1 < 0) ? realZCoord : 0;
+                    result = (buffer[0].recieve[j * N_x + i] + getPreviousValue(phi, i, j, m, h)) / squareH[2] +
+                              (getPreviousValue(phi, i, j - 1, m11, h) + getPreviousValue(phi, i, j + 1, m1, h)) / squareH[1] +
+                              (getPreviousValue(phi, i - 1, j, m22, h) + getPreviousValue(phi, i + 1, j, m2, h)) / squareH[0];
 
-                    result += (buffer[0].recieve[j * N_x + i] + getPreviousValue(phi, i, j, 1)) / squareH[2] +
-                        (getPreviousValue(phi, i, j - 1, 0) + getPreviousValue(phi, i, j + 1, 0)) / squareH[1] +
-                        (getPreviousValue(phi, i - 1, j, 0) + getPreviousValue(phi, i + 1, j, 0)) / squareH[0];
-                    
                     // subtract right part
                     result -= 6.0 - A * getFunctionValue(i, j, realZCoord, h);
                     result /= calculationConstant;
 
                     buffer[0].send[j * N_x + i] = result;
 
-                    if (fabs(result - getPreviousValue(phi, i, j, 0)) > localMaxDiff) {
-                        localMaxDiff = fabs(result - getPreviousValue(phi, i, j, 0));
+                    if (fabs(result - getPreviousValue(phi, i, j, 0, h)) > localMaxDiff)
+                    {
+                        localMaxDiff = fabs(result - getPreviousValue(phi, i, j, 0, h));
+                    }
+
+                    if (i * h[0] - 1 == 1 && j * h[1] - 1 == 1) {
+                        //printf("LMD_o1: %lf (%lf %lf %lf), result: %lf, prev: %lf, k: (%d, %d, %d)\n",
+                        //    localMaxDiff, i * h[0] - 1, j * h[1] - 1, realZCoord * h[2] - 1, result, getPreviousValue(phi, i, j - 1, m11, h), i, j-1, m11);
                     }
 
                     put(phi, i, j, 0, result);
-
-                    result = 0;
                 }
             }
         }
 
-        if (rank != totalProcessesNumber - 1) {
+        if (rank != totalProcessesNumber - 1)
+        {
             MPI_Wait(&desc[2], MPI_STATUS_IGNORE);
             MPI_Wait(&desc[3], MPI_STATUS_IGNORE);
 
@@ -176,26 +209,35 @@ int main(int argc, char** argv) {
 
             realZCoord = boundaryKForCurrRank - 1;
             int z = phi->lengthByZCoord - 1;
-            for (int j = 0; j < N_y; ++j) {
-                for (int i = 0; i < N_x; ++i) {
+            for (int j = 0; j < N_y; ++j)
+            {
+                for (int i = 0; i < N_x; ++i)
+                {
+                    int m1 = ((j + 1) * h[1] > D_y) ? realZCoord : z;
+                    int m11 = (j - 1 < 0) ? realZCoord : z;
+                    int m2 = ((i + 1) * h[0] > D_x) ? realZCoord : z;
+                    int m22 = (i - 1 < 0) ? realZCoord : z;
+                    result = (buffer[1].recieve[j * N_x + i] + getPreviousValue(phi, i, j, z - 1, h)) / squareH[2] +
+                              (getPreviousValue(phi, i, j - 1, m11, h) + getPreviousValue(phi, i, j + 1, m1, h)) / squareH[1] +
+                              (getPreviousValue(phi, i - 1, j, m22, h) + getPreviousValue(phi, i + 1, j, m2, h)) / squareH[0];
 
-                    result += (buffer[1].recieve[j * N_x + i] + getPreviousValue(phi, i, j, z - 1)) / squareH[2] +
-                        (getPreviousValue(phi, i, j - 1, z) + getPreviousValue(phi, i, j + 1, z)) / squareH[0] +
-                        (getPreviousValue(phi, i - 1, j, z) + getPreviousValue(phi, i + 1, j, z)) / squareH[1];
-                    
                     // subtract right part
                     result -= 6.0 - A * getFunctionValue(i, j, realZCoord, h);
                     result /= calculationConstant;
 
                     buffer[1].send[j * N_x + i] = result;
 
-                    if (fabs(result - getPreviousValue(phi, i, j, z)) > localMaxDiff) {
-                        localMaxDiff = fabs(result - getPreviousValue(phi, i, j, z));
+                    if (fabs(result - getPreviousValue(phi, i, j, z, h)) > localMaxDiff)
+                    {
+                        localMaxDiff = fabs(result - getPreviousValue(phi, i, j, z, h));
+                    }
+
+                    if (i * h[0] - 1 == 1 && j * h[1] - 1 == 1) {
+                        //printf("LMD_o2: %lf (%lf %lf %lf), result: %lf, prev: %lf, k: %d\n",
+                        //    localMaxDiff, i * h[0] - 1, j * h[1] - 1, realZCoord * h[2] - 1, result, getPreviousValue(phi, i, j - 1, z, h), z);
                     }
 
                     put(phi, i, j, z, result);
-
-                    result = 0;
                 }
             }
         }
@@ -205,17 +247,19 @@ int main(int argc, char** argv) {
         swap(phi);
     }
 
-    if (!rank) {
+    if (!rank)
+    {
         printf("Time taken: %lf sec.\n", MPI_Wtime() - start);
     }
 
     isCorrectCalculation(h, phi, rank, boundaryKForPrevRank);
 
-    if (rank != 0) {
+    if (rank != 0)
+    {
         destroyBuffer(&buffer[0]);
-
     }
-    if (rank != totalProcessesNumber - 1) {
+    if (rank != totalProcessesNumber - 1)
+    {
         destroyBuffer(&buffer[1]);
     }
 

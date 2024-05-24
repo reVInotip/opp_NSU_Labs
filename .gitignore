@@ -153,3 +153,5 @@ lab1/executable
 lab3/executable
 lab4/executable*
 lab4/graphics.ods
+*log*
+*executable*
