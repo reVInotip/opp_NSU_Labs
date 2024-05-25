@@ -27,16 +27,6 @@ bool is_stop_observe = false;
 bool observer_works = true;
 stack<unsigned> *tasks = nullptr;
 
-size_t get_count_tasks(int argc, char* argv[])
-{
-    if (argc < 2 || argc >= 3)
-    {  
-        return 0;
-    }
-
-    return stoi(argv[1]);
-}
-
 void* thread_observer(void *args) {
     int rank = 0, size = 0;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -227,24 +217,13 @@ int main(int argc, char *argv[]) {
     MPI_Comm_size(MPI_COMM_WORLD, &total_processes_number);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    size_t count_tasks = get_count_tasks(argc, argv);
-    if (count_tasks < static_cast<size_t>(total_processes_number)) {
-        logger.print("Count tasks less then count proccess!", 2);
-        abort();
-    }
-
     tasks = new stack<unsigned>();
-    //count_tasks_for_process = count_tasks / static_cast<size_t>(total_processes_number) +
-    //    (count_tasks % static_cast<size_t>(total_processes_number) > rank);
     count_tasks_for_process = (rank + 1) * 10;
     max_count_tasks = (total_processes_number - 1) * 10;
 
     logger.print("Count tasks: " + to_string(count_tasks_for_process) + ", critical count tasks: " +
         to_string(critical_count_tasks) + " for process " + to_string(rank), 0);
 
-    //std::random_device rd;  // a seed source for the random number engine
-    //std::mt19937 gen(rd()); // mersenne_twister_engine seeded with rd()
-    //std::uniform_int_distribution<> distrib(1, 10);
     for (size_t i = 0; i < count_tasks_for_process; ++i)
     {
         tasks->push(1);
@@ -289,7 +268,7 @@ int main(int argc, char *argv[]) {
 
     MPI_Barrier(MPI_COMM_WORLD);
 
-    logger.print("Count finished tasks: " + to_string(count_finished_tasks) + " of " + to_string(count_tasks) +
+    logger.print("Count finished tasks: " + to_string(count_finished_tasks) + " of " + to_string(count_tasks_for_process) +
         " in proccess " + to_string(rank), 0);
     logger.print("Job done!", 0);
 
